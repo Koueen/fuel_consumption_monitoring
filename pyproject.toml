@@ -1,0 +1,25 @@
+[tool.poetry]
+name = 'fuel-consumption-monitoring'
+version = "0.1.0"
+description = ""
+authors = ["Koueen"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+scipy = "^1.12.0"
+pandas = "^2.2.0"
+matplotlib = "^3.8.2"
+exifread = "^3.0.0"
+plotly = "*"
+tyro = "^0.8.2"
+scikit-learn = "^1.4.2"
+seaborn = "^0.13.2"
+ipykernel = "^6.29.4"
+ipywidgets = "^8.1.2"
+nbformat = "^5.10.4"
+kaleido = "0.2.1"
+
+[tool.poetry.group.style.dependencies]
+isort = "^5.12.0"
+black = "^23.11.0"
