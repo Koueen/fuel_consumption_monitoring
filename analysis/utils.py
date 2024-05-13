@@ -1,10 +1,11 @@
+from typing import Tuple
+
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
-from constants import CM_VEHICLE, CM_READER_MODE
-import numpy as np
+from constants import CM_READER_MODE, CM_VEHICLE
 from lr_model import FuelDistanceLR
-from typing import Tuple
 
 
 def plot_fuel_consumption_and_err(df, vehicle_type):
@@ -72,6 +73,7 @@ def plot_fuel_consumption_and_err(df, vehicle_type):
     fig.write_image(f'results/bar_plot_{vehicle_type}.png')
     fig.show()
 
+
 def plot_gap_consumption(df_car: pd.DataFrame, df_van: pd.DataFrame):
     df_car['vehicle_type'] = 'car'
     df_van['vehicle_type'] = 'van'
@@ -122,41 +124,65 @@ def plot_gap_consumption(df_car: pd.DataFrame, df_van: pd.DataFrame):
     fig.show()
     fig.write_image(f'results/box_error_general.png')
 
+
 def plot_lifetime_convergence(df_car_raw, df_van_raw):
     def create_line_data_points(x, intercept, coefficient):
-        return intercept + x*coefficient
+        return intercept + x * coefficient
 
     def trim_data(data) -> Tuple[int, int]:
         Q1 = np.percentile(data, 25)
         Q3 = np.percentile(data, 75)
         IQR = Q3 - Q1
-        return Q1 - (1.5*IQR), Q3 + (1.5*IQR) # Lower and upper bounds
-    
+        return Q1 - (1.5 * IQR), Q3 + (1.5 * IQR)  # Lower and upper bounds
 
-    df_car_raw.drop(df_car_raw[(df_car_raw['Total distance travelled (lifetime) (km)']==0.0) | (df_car_raw['Total fuel consumed (lifetime) (l)']==0.0)].index.values, axis=0, inplace = True)
-    df_van_raw.drop(df_van_raw[(df_van_raw['Total distance travelled (lifetime) (km)']==0.0) | (df_van_raw['Total fuel consumed (lifetime) (l)']==0.0)].index.values, axis=0, inplace = True)
+    df_car_raw.drop(
+        df_car_raw[
+            (df_car_raw['Total distance travelled (lifetime) (km)'] == 0.0)
+            | (df_car_raw['Total fuel consumed (lifetime) (l)'] == 0.0)
+        ].index.values,
+        axis=0,
+        inplace=True,
+    )
+    df_van_raw.drop(
+        df_van_raw[
+            (df_van_raw['Total distance travelled (lifetime) (km)'] == 0.0)
+            | (df_van_raw['Total fuel consumed (lifetime) (l)'] == 0.0)
+        ].index.values,
+        axis=0,
+        inplace=True,
+    )
     car_l_bound, car_u_bound = trim_data(df_car_raw['Total distance travelled (lifetime) (km)'])
-    df_car_raw_trim = df_car_raw[(df_car_raw['Total distance travelled (lifetime) (km)']>car_l_bound) & (df_car_raw['Total distance travelled (lifetime) (km)']<car_u_bound)] .copy()
+    df_car_raw_trim = df_car_raw[
+        (df_car_raw['Total distance travelled (lifetime) (km)'] > car_l_bound)
+        & (df_car_raw['Total distance travelled (lifetime) (km)'] < car_u_bound)
+    ].copy()
     van_l_bound, van_u_bound = trim_data(df_van_raw['Total distance travelled (lifetime) (km)'])
-    df_van_raw_trim = df_van_raw[(df_van_raw['Total distance travelled (lifetime) (km)']>van_l_bound) & (df_van_raw['Total distance travelled (lifetime) (km)']<van_u_bound)].copy()
+    df_van_raw_trim = df_van_raw[
+        (df_van_raw['Total distance travelled (lifetime) (km)'] > van_l_bound)
+        & (df_van_raw['Total distance travelled (lifetime) (km)'] < van_u_bound)
+    ].copy()
 
     car_fuel_distance_obj = FuelDistanceLR()
     car_residuals = car_fuel_distance_obj(df_car_raw_trim)
     van_fuel_distance_obj = FuelDistanceLR()
     van_residuals = van_fuel_distance_obj(df_van_raw_trim)
     coeffs_dict = {}
-    intercept , coefficient = car_fuel_distance_obj.get_weights()
-    coeffs_dict['car'] = {'intercept': intercept[0], 'coefficients': coefficient[0][0]} 
-    intercept , coefficient = van_fuel_distance_obj.get_weights()
-    coeffs_dict['van'] = {'intercept': intercept[0], 'coefficients': coefficient[0][0]} 
+    intercept, coefficient = car_fuel_distance_obj.get_weights()
+    coeffs_dict['car'] = {'intercept': intercept[0], 'coefficients': coefficient[0][0]}
+    intercept, coefficient = van_fuel_distance_obj.get_weights()
+    coeffs_dict['van'] = {'intercept': intercept[0], 'coefficients': coefficient[0][0]}
     print(car_fuel_distance_obj.get_metrics())
     print(van_fuel_distance_obj.get_metrics())
     # Create line data points
     line_car_data = []
     line_van_data = []
-    for point_x in range(1,300000, 100):
-        line_car_data.append(create_line_data_points(point_x,coeffs_dict['car']['intercept'], coeffs_dict['car']['coefficients']))
-        line_van_data.append(create_line_data_points(point_x,coeffs_dict['van']['intercept'], coeffs_dict['van']['coefficients']))
+    for point_x in range(1, 300000, 100):
+        line_car_data.append(
+            create_line_data_points(point_x, coeffs_dict['car']['intercept'], coeffs_dict['car']['coefficients'])
+        )
+        line_van_data.append(
+            create_line_data_points(point_x, coeffs_dict['van']['intercept'], coeffs_dict['van']['coefficients'])
+        )
 
     df_car_raw_trim['residuals'] = car_residuals
     df_van_raw_trim['residuals'] = van_residuals
@@ -171,51 +197,71 @@ def plot_lifetime_convergence(df_car_raw, df_van_raw):
     )
     df_cleaned = df_global.dropna(subset=['fuel_consumed', 'distance_travelled'])
     df_no_duplicates = df_cleaned.drop_duplicates(subset=['fuel_consumed', 'distance_travelled'])
-    
+
     fig = go.Figure()
-    data_cars = df_no_duplicates[df_no_duplicates['type']=='car'].copy()
-    data_vans = df_no_duplicates[df_no_duplicates['type']=='van'].copy()
-# Add traces. Scattergl for high volume of data
-    fig.add_trace(go.Scattergl(x=data_cars['distance_travelled'].values, y=data_cars['fuel_consumed'].values,opacity =0.6,
-        mode='markers',
-        name='Cars',
-        marker = dict(color='rgb(56,41,131)', size=3) # trendline='ols'
-        ))
-    fig.add_trace(go.Scattergl(x=data_vans['distance_travelled'].values, y=data_vans['fuel_consumed'].values,opacity =0.6,
-        mode='markers',
-        name='Vans',
-        marker = dict(color='rgb(196,166,44)',size=3)
-        ))
-    fig.add_trace(go.Scatter(x=np.arange(1,300000,100), y=line_car_data, line = dict(color='rgb(67,178,47)', width=1.5, dash='dashdot'),
-        mode='lines',
-        name='Car-trend')
+    data_cars = df_no_duplicates[df_no_duplicates['type'] == 'car'].copy()
+    data_vans = df_no_duplicates[df_no_duplicates['type'] == 'van'].copy()
+    # Add traces. Scattergl for high volume of data
+    fig.add_trace(
+        go.Scattergl(
+            x=data_cars['distance_travelled'].values,
+            y=data_cars['fuel_consumed'].values,
+            opacity=0.6,
+            mode='markers',
+            name='Cars',
+            marker=dict(color='rgb(56,41,131)', size=3),  # trendline='ols'
         )
-    fig.add_trace(go.Scatter(x=np.arange(1,300000,100), y=line_van_data, line = dict(color='rgb(178,67,47)', width=1.5, dash='dashdot'),
-        mode='lines',
-        name='Van-trend')
+    )
+    fig.add_trace(
+        go.Scattergl(
+            x=data_vans['distance_travelled'].values,
+            y=data_vans['fuel_consumed'].values,
+            opacity=0.6,
+            mode='markers',
+            name='Vans',
+            marker=dict(color='rgb(196,166,44)', size=3),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(1, 300000, 100),
+            y=line_car_data,
+            line=dict(color='rgb(67,178,47)', width=1.5, dash='dashdot'),
+            mode='lines',
+            name='Car-trend',
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=np.arange(1, 300000, 100),
+            y=line_van_data,
+            line=dict(color='rgb(178,67,47)', width=1.5, dash='dashdot'),
+            mode='lines',
+            name='Van-trend',
+        )
     )
     fig.add_annotation(
-        x=50000, # 175k
-        y=create_line_data_points(50000,coeffs_dict['car']['intercept'], coeffs_dict['car']['coefficients']),
+        x=50000,  # 175k
+        y=create_line_data_points(50000, coeffs_dict['car']['intercept'], coeffs_dict['car']['coefficients']),
         text=f'Car Slope: {round(coeffs_dict["car"]["coefficients"],4)}km/l',
         showarrow=True,
         xanchor='left',
         xshift=10,
-)
+    )
     fig.add_annotation(
         x=50000,
-        y=create_line_data_points(50000,coeffs_dict['van']['intercept'], coeffs_dict['van']['coefficients']),
+        y=create_line_data_points(50000, coeffs_dict['van']['intercept'], coeffs_dict['van']['coefficients']),
         text=f'Van Slope: {round(coeffs_dict["van"]["coefficients"],4)}km/l',
         showarrow=True,
         xanchor='left',
         yanchor='bottom',
-)
+    )
     fig.update_layout(
         xaxis_range=[0, 70000],  # All data is contained withing 0 and 200k
         yaxis_range=[0, 15000],
         xaxis_title='Distance Travelled (km)',
         yaxis_title='Fuel Consumption (l)',
-        legend = dict(font = dict(family = 'Droid Sans', size = 10, color = 'black'),itemsizing='constant'),
+        legend=dict(font=dict(family='Droid Sans', size=10, color='black'), itemsizing='constant'),
         title={
             'text': 'Lifetime: Fuel Consumed vs Distance Travelled (Trimmed)',
             'y': 0.92,
@@ -228,24 +274,27 @@ def plot_lifetime_convergence(df_car_raw, df_van_raw):
     fig.write_image('results/scatter_trimmed.png')
     return data_cars, data_vans
 
-def plot_residuals(df,vehicle_type):
+
+def plot_residuals(df, vehicle_type):
     if vehicle_type == 'van':
         color = 'rgb(196,166,44)'
-        
+
     else:
         color = 'rgb(56,41,131)'
-    df.sort_values(by=['distance_travelled'], inplace= True)
+    df.sort_values(by=['distance_travelled'], inplace=True)
     debug = 'point'
-    fig = go.Figure([
-    go.Scattergl(
-        x=df['distance_travelled'].values,
-        y=df['residuals'].values,
-        line=dict(color='rgb(0,100,80)'),
-        mode='markers',
-        opacity=.30,
-        marker = dict(color=color,size=4)
-    ),
-    ])
+    fig = go.Figure(
+        [
+            go.Scattergl(
+                x=df['distance_travelled'].values,
+                y=df['residuals'].values,
+                line=dict(color='rgb(0,100,80)'),
+                mode='markers',
+                opacity=0.30,
+                marker=dict(color=color, size=4),
+            ),
+        ]
+    )
     fig.update_layout(
         # xaxis_range=[0, 30000],  # All data is contained withing 0 and 200k
         xaxis_title='Distance Travelled (km)',
@@ -257,6 +306,6 @@ def plot_residuals(df,vehicle_type):
             'xanchor': 'center',
             'yanchor': 'top',
         },
-)   
+    )
     fig.show()
     fig.write_image(f'results/residuals_{vehicle_type}.png')
